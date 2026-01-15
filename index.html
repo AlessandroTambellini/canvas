@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Draw on a canvas and mix elementary colors">
-    <link rel="shortcut icon" href="icon.webp" type="image/webp">
+    <link rel="icon" href="icon.webp" type="image/webp">
     
     <title>Canvas</title>
 
@@ -608,7 +608,7 @@
 
             window.addEventListener('resize', () => {
                 grid_rect = canvas.getBoundingClientRect();
-                /* I do not need to also re-calculate the active_marker_container_rect
+                /* I don't need to also re-calculate the active_marker_container_rect
                 because, it is re-calculated every time the mousedown event fires on a marker. */
             });
 
@@ -666,9 +666,12 @@
             }
 
             document.addEventListener('mousemove', e => {
-                e.preventDefault(); // prevent scrolling
+                // prevent scrolling
+                // e.preventDefault(); 
                 move_marker(e);
-            }, { passive: false });
+            }, //{ passive: false }
+            );
+
             // https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#using_passive_listeners
             document.addEventListener('touchmove', e => {
                 e.preventDefault(); // prevent scrolling
