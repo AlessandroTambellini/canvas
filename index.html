@@ -621,6 +621,26 @@
                 }, { passive: true });
             });
 
+
+            document.addEventListener('mousemove', e => {
+                /* e.preventDefault(); */ // prevent scrolling
+                move_marker(e);
+            }, /* { passive: false } */);
+            // https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#using_passive_listeners
+            document.addEventListener('touchmove', e => {
+                e.preventDefault(); // prevent scrolling
+                move_marker(e);
+            }, { passive: false });
+
+
+            document.addEventListener('mouseup', e => {
+                lay_marker(e);
+            });
+            document.addEventListener('touchend', e => {
+                lay_marker(e);
+            });
+
+
             function select_marker(e, marker) 
             {
                 if (e.type === 'mousedown' && e.button !== 0) {
@@ -635,133 +655,114 @@
                 markers if hovered. */
             }
 
-            document.addEventListener('mouseup', e => {
-                lay_marker(e);
-            });
-            document.addEventListener('touchend', e => {
-                lay_marker(e);
-            });
-
-            function lay_marker(e) 
+            function move_marker(e) 
             {
-                if (e.type === 'mouseup' && e.button !== 0) {
-                    return;
+                if (!active_marker) return;
+
+                const marker_left = Number(window.getComputedStyle(active_marker).left.split('px')[0]);
+                const marker_top = Number(window.getComputedStyle(active_marker).top.split('px')[0]);
+                
+                const cursor_x = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                const cursor_y = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+                let left = 0;
+                if (marker_left < 0) {
+                    left = 0;
+                } else if (document.body.offsetWidth - (marker_left + active_marker.offsetWidth) < 0) {
+                    left = document.body.offsetWidth - active_marker.offsetWidth;
+                } else {
+                    left = marker_left + (cursor_x - prev_cursor_x);
                 }
-                if (active_marker) 
+                
+                let top = 0;
+                if (marker_top < 0) {
+                    top = 0;
+                } else if (document.body.offsetHeight - (marker_top + active_marker.offsetHeight) < 0) {
+                    top = document.body.offsetHeight - active_marker.offsetHeight;
+                } else {
+                    top = marker_top + (cursor_y - prev_cursor_y);
+                }
+
+                active_marker.style.left = `${left}px`;
+                active_marker.style.top = `${top}px`;
+                prev_cursor_x = cursor_x;
+                prev_cursor_y = cursor_y;
+
+                /* active_marker hovers its container */
+                if (marker_in_boundaries(active_marker_container_rect, marker_top, marker_left)) {
+                    active_marker_container.classList.add('marker-container-hover');
+                } else {
+                    active_marker_container.classList.remove('marker-container-hover');
+                }
+
+                /* active_marker touches the canvas */
+                if (marker_in_boundaries(grid_rect, marker_top, marker_left)) 
                 {
-                    const active_marker_left = Number(window.getComputedStyle(active_marker).left.split('px')[0]);
-                    const active_marker_top = Number(window.getComputedStyle(active_marker).top.split('px')[0]);
-                    if (active_marker_top + active_marker.offsetHeight > active_marker_container_rect.top &&
-                        active_marker_top < active_marker_container_rect.bottom &&
-                        active_marker_left + active_marker.offsetWidth > active_marker_container_rect.left &&
-                        active_marker_left < active_marker_container_rect.right
-                    ) {
-                        active_marker_container.classList.remove('marker-container-hover');
-                        active_marker.style.top = 'unset';
-                        active_marker.style.left = 'unset';
-                    }
-                    active_marker.style.zIndex = 1;
-                    active_marker = null;
-                } 
-            }
-
-            document.addEventListener('mousemove', e => {
-                // prevent scrolling
-                // e.preventDefault(); 
-                move_marker(e);
-            }, //{ passive: false }
-            );
-
-            // https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#using_passive_listeners
-            document.addEventListener('touchmove', e => {
-                e.preventDefault(); // prevent scrolling
-                move_marker(e);
-            }, { passive: false });
-
-            function move_marker(e) {
-                if (active_marker) 
-                {
-                    const active_marker_left = Number(window.getComputedStyle(active_marker).left.split('px')[0]);
-                    const active_marker_top = Number(window.getComputedStyle(active_marker).top.split('px')[0]);
+                    const cell_size = canvas.children[0].children[0].offsetWidth;
                     
-                    const cursor_x = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-                    const cursor_y = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                    const dist_from_left_border = marker_left - grid_rect.left;
+                    const dist_from_top_border = marker_top - grid_rect.top;
 
-                    let left = 0;
-                    if (active_marker_left < 0) {
-                        left = 0;
-                    } else if (document.body.offsetWidth - (active_marker_left + active_marker.offsetWidth) < 0) {
-                        left = document.body.offsetWidth - active_marker.offsetWidth;
-                    } else {
-                        left = active_marker_left + (cursor_x - prev_cursor_x);
-                    }
-                    
-                    let top = 0;
-                    if (active_marker_top < 0) {
-                        top = 0;
-                    } else if (document.body.offsetHeight - (active_marker_top + active_marker.offsetHeight) < 0) {
-                        top = document.body.offsetHeight - active_marker.offsetHeight;
-                    } else {
-                        top = active_marker_top + (cursor_y - prev_cursor_y);
-                    }
+                    const leftmost_cell = Math.floor(dist_from_left_border / cell_size); 
+                    const rightmost_cell = Math.floor((dist_from_left_border + active_marker.offsetWidth) / cell_size);
+                    const topmost_cell = Math.floor(dist_from_top_border / cell_size);
+                    const bottommost_cell = Math.floor((dist_from_top_border + active_marker.offsetHeight) / cell_size);
 
-                    active_marker.style.left = `${left}px`;
-                    active_marker.style.top = `${top}px`;
-                    prev_cursor_x = cursor_x;
-                    prev_cursor_y = cursor_y;
+                    const grid_size = canvas.children.length;
+                    for (let i = topmost_cell; i <= bottommost_cell; i++) {
+                        for (let j = leftmost_cell; j <= rightmost_cell; j++) 
+                        {
+                            if (i < 0 || j < 0 || i >= grid_size || j >= grid_size) continue;
 
-                    /* active_marker touches its container */
-                    if (active_marker_top + active_marker.offsetHeight > active_marker_container_rect.top &&
-                        active_marker_top < active_marker_container_rect.bottom &&
-                        active_marker_left + active_marker.offsetWidth > active_marker_container_rect.left &&
-                        active_marker_left < active_marker_container_rect.right
-                    ) {
-                        active_marker_container.classList.add('marker-container-hover');
-                    } else {
-                        active_marker_container.classList.remove('marker-container-hover');
-                    }
-
-                    /* active_marker on the canvas */
-                    if (active_marker_top + active_marker.offsetHeight > grid_rect.top &&
-                        active_marker_top < grid_rect.bottom &&
-                        active_marker_left + active_marker.offsetWidth > grid_rect.left &&
-                        active_marker_left < grid_rect.right
-                    ) {
-                        const cell_size = canvas.children[0].children[0].offsetWidth;
-                        
-                        const dist_from_left_border = active_marker_left - grid_rect.left;
-                        const dist_from_top_border = active_marker_top - grid_rect.top;
-
-                        const leftmost_cell = Math.floor(dist_from_left_border / cell_size); 
-                        const rightmost_cell = Math.floor((dist_from_left_border + active_marker.offsetWidth) / cell_size);
-                        const topmost_cell = Math.floor(dist_from_top_border / cell_size);
-                        const bottommost_cell = Math.floor((dist_from_top_border + active_marker.offsetHeight) / cell_size);
-
-                        const grid_size = canvas.children.length;
-                        for (let i = topmost_cell; i <= bottommost_cell; i++) {
-                            for (let j = leftmost_cell; j <= rightmost_cell; j++) {
-                                if (i >= 0 && j >= 0 && i < grid_size && j < grid_size) {
-                                    if (active_marker.id === 'u') {
-                                        canvas.children[i].children[j].className = 'cell';
-                                    } else {
-                                        const child_class = canvas.children[i].children[j].className;
-                                        let color = child_class === 'cell' ? '---' : child_class.split(' ')[1];
-                                        if (!color.includes(active_marker.id)) {
-                                            if (active_marker.id === 'r') color = 'r' + color[1] + color[2];
-                                            else if (active_marker.id === 'g') color = color[0] + 'g' + color[2];
-                                            else if (active_marker.id === 'b') color = color[0] + color[1] + 'b';
-                                            else {
-                                                console.error('unidentifiable active_marker.id:', active_marker.id);
-                                                return;
-                                            }
-                                            canvas.children[i].children[j].className = `cell ${color}`;
-                                        }
+                            if (active_marker.id === 'u') {
+                                canvas.children[i].children[j].className = 'cell';
+                            } else {
+                                const child_class = canvas.children[i].children[j].className;
+                                let color = child_class === 'cell' ? '---' : child_class.split(' ')[1];
+                                if (!color.includes(active_marker.id)) {
+                                    if (active_marker.id === 'r') color = 'r' + color[1] + color[2];
+                                    else if (active_marker.id === 'g') color = color[0] + 'g' + color[2];
+                                    else if (active_marker.id === 'b') color = color[0] + color[1] + 'b';
+                                    else {
+                                        console.error('unidentifiable active_marker.id:', active_marker.id);
+                                        return;
                                     }
+                                    canvas.children[i].children[j].className = `cell ${color}`;
                                 }
                             }
                         }
-                    } // endif (active_marker on the canvas)
+                    }
+                } // endif (active_marker on the canvas)
+            }
+
+            function lay_marker(e) 
+            {
+                if (e.type === 'mouseup' && e.button !== 0) return;
+                if (!active_marker) return;
+
+                const marker_left = Number(window.getComputedStyle(active_marker).left.split('px')[0]);
+                const marker_top = Number(window.getComputedStyle(active_marker).top.split('px')[0]);
+                
+                if (marker_in_boundaries(active_marker_container_rect, marker_top, marker_left)) 
+                {
+                    active_marker_container.classList.remove('marker-container-hover');
+                    active_marker.style.top = 'unset';
+                    active_marker.style.left = 'unset';
                 }
+
+                active_marker.style.zIndex = 1;
+                active_marker = null;
+            }
+
+            function marker_in_boundaries(container, marker_top, marker_left) {
+                return (
+                    /* x grows from top to bottom
+                    y grows from left to right */
+                    marker_top + active_marker.offsetHeight > container.top  &&
+                    marker_top < container.bottom                            &&
+                    marker_left + active_marker.offsetWidth > container.left &&
+                    marker_left < container.right
+                );
             }
         </script>
 </body>
